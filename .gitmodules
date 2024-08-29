@@ -1,0 +1,6 @@
+[submodule "submodules/matlab/fdnToolbox"]
+	path = submodules/matlab/fdnToolbox
+	url = https://github.com/SebastianJiroSchlecht/fdnToolbox
+[submodule "submodules/matlab/sdn-matlab"]
+	path = submodules/matlab/fdnToolbox
+	url = https://github.com/enzodesena/sdn-matlab
