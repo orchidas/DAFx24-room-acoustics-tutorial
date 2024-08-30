@@ -11,7 +11,7 @@ This repository contains materials related to the tutorial presented at DAFx 202
 	* Requires `pip > 21.3`
 	* Upgrade pip with `pip install --upgrade pip`
 - Notebooks are in the `src` folder.
-- Additional datasets are in the `resource` folder
+- Additional datasets are in the `resources` folder
 
 ### Other information
 - This repo contains a Python implementation of the Feedback Delay Network. For a more comprehensive Matlab toolbox, see [FDNToolbox](https://github.com/SebastianJiroSchlecht/fdnToolbox)

@@ -1,7 +1,7 @@
 import numpy as np
 from typing import Optional
 from numpy.typing import ArrayLike, NDArray
-from .feedback_matrix import FeedbackMatrix, FeedbackMatrixType
+from .feedback_matrix import FeedbackMatrix, FilterMatrix, FeedbackMatrixType
 from .delay_line import DelayLine
 from .absorption_filter import AbsorptionGains
 
@@ -16,6 +16,7 @@ class FDN:
         self.sample_rate = sample_rate
         self.num_inputs = num_inputs
         self.num_outputs = num_outputs
+        self.postproc_filters = None
 
     def init_io_gains(self, b: NDArray, c: NDArray):
         assert b.shape == (self.num_delay_lines, self.num_inputs)
@@ -55,12 +56,28 @@ class FDN:
             self.delay_lines.append(
                 DelayLine(self.delay_length_samps[i], self.frame_size))
 
+    def init_postprocessing_filters(self, filters: NDArray):
+        """
+        Post processing filter matrix that adapts the FDN output
+        Args: filters of size num_out x num_out x order
+        """
+        self.postproc_filters = FilterMatrix(self.num_outputs,
+                                             self.num_outputs, self.frame_size)
+        self.postproc_filters.initialise_matrix(filters)
+
     def process(self, input_data: NDArray) -> NDArray:
         """Process an incoming signal frame wise through the FDN and return the output"""
 
         assert input_data.shape[0] == self.num_inputs
         ir_len = input_data.shape[-1]
-        output_data = np.zeros((self.num_outputs, ir_len))
+
+        if self.postproc_filters is None:
+            output_data = np.zeros((self.num_outputs, ir_len))
+        else:
+            output_data = np.zeros(
+                (self.num_outputs,
+                 ir_len + self.postproc_filters.filter_matrix.shape[-1] - 1))
+
         self.feedback_output = np.zeros(
             (self.num_delay_lines,
              self.frame_size + self.feedback.filter_order - 1))
@@ -69,8 +86,9 @@ class FDN:
 
         sample_number = 0
         while sample_number < ir_len - self.frame_size:
-            cur_input_buffer = input_data[:, sample_number:sample_number +
-                                          self.frame_size]
+            cur_idx_range = np.arange(sample_number,
+                                      sample_number + self.frame_size)
+            cur_input_buffer = input_data[:, cur_idx_range]
 
             # multiply with input gains
             temp_data = self.input_gains @ cur_input_buffer
@@ -94,9 +112,15 @@ class FDN:
 
             # multiply delay line output with output gains
             cur_output_buffer = self.output_gains @ delay_line_output
-            output_data[:, sample_number:sample_number + self.
-                        frame_size] = cur_output_buffer + self.direct_gain @ cur_input_buffer
+            temp_output_data = cur_output_buffer + self.direct_gain @ cur_input_buffer
 
+            if self.postproc_filters is not None:
+                output_data[:, sample_number:sample_number + self.frame_size +
+                            self.postproc_filters.filter_matrix.shape[-1] -
+                            1] += self.postproc_filters.process_input(
+                                temp_output_data)
+            else:
+                output_data[:, cur_idx_range] = temp_output_data
             sample_number += self.frame_size
 
         return output_data

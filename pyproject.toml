@@ -35,6 +35,7 @@ dependencies = [
     "pyroomacoustics",
     "sofar",
     "audio-dspy",
+    "soundfile"
 ]
 
 [project.optional-dependencies]
