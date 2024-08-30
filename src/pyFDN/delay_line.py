@@ -1,5 +1,23 @@
 import numpy as np
+import sympy as sp
 from numpy.typing import ArrayLike
+from .utils import ms_to_samps
+
+
+def generate_coprime_delay_line_lengths(delay_range_ms: ArrayLike,
+                                        num_delay_lines: int,
+                                        fs: float) -> ArrayLike:
+    delay_range_samps = ms_to_samps(delay_range_ms, fs)
+    # generate prime numbers in specified range
+    prime_nums = np.array(list(
+        sp.primerange(delay_range_samps[0], delay_range_samps[1])),
+                          dtype=np.int32)
+    rand_primes = prime_nums[np.random.permutation(len(prime_nums))]
+    # delay line lengths
+    delay_lengths = np.array(np.r_[rand_primes[:num_delay_lines - 1],
+                                   sp.nextprime(delay_range_samps[1])],
+                             dtype=np.int32)
+    return delay_lengths
 
 
 class DelayLine:
@@ -35,11 +53,6 @@ class DelayLine:
 
     def writeBuffer(self, input_data: ArrayLike):
         """Write new data into the delay line buffer"""
-
-        # if (input_data.size != self.frame_size):
-        #     print(" Input data size is ", input_data.size,
-        #           ' but frame size is ', self.frame_size)
-        #     raise Exception("Buffer Sizes do not match")
 
         # shift data to the right
         self.data = np.roll(self.data, len(input_data))

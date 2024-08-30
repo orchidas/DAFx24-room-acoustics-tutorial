@@ -52,6 +52,19 @@ def ms_to_samps(ms: Union[float, ArrayLike],
         return int(samp)
 
 
+def get_exponential_envelope(ir_len_samp: int, fs: float, t60_ms: float,
+                             init_amp: float):
+    """
+    For a homogeneous T60, return the exponentual envelope of the RIR of the form
+    A * exp(-t / tau), where tau is the time constant derived from tbe T60 and A
+    is the amplitude of he RIR's peak
+    """
+    time_vector = np.arange(0, ir_len_samp / fs, 1.0 / fs)
+    time_constant = (t60_ms * 1e-3) / np.log(1000)
+    exp_envelope = init_amp * np.exp(-time_vector / time_constant)
+    return exp_envelope
+
+
 def tf2minphase(tf: NDArray,
                 axis: int = -1,
                 is_even_fft: bool = True) -> NDArray:
