@@ -1,0 +1,68 @@
+[build-system]
+requires = ["setuptools ~= 67.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+# include the name of the folder containing the library
+include = ["pyFDN"]
+# eg: include = ["spatial_audio"]
+
+[project]
+name = "DAFx24-room-acoustics-tutorial"
+description = "Resources for the tutorial `Modelling room acoustics for immersive audio applications`"
+version = "0.0.1"
+requires-python = ">=3.8"
+readme = "README.md"
+classifiers = [
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "License :: Other/Proprietary License",
+    "Operating System :: OS Independent",
+]
+
+dependencies = [
+    "loguru>=0.6.0",
+    "notebook",
+    "numpy",
+    "scipy",
+    "matplotlib",
+    "nbstripout",
+    "sympy",
+    "pyroomacoustics",
+    "sofar",
+    "audio-dspy",
+]
+
+[project.optional-dependencies]
+test = ["pytest", "pytest-cov", "tox"]
+dev = [
+    "flake8",
+    "flake8-pyproject",
+    "isort>=5.12.0",
+    "mypy",
+    "pylint",
+    "yapf",
+    "toml",
+]
+
+[tool.flake8]
+max-line-length = 120
+extend-ignore = "E203"
+
+known_first_party = [ "src"]
+force_sort_within_sections = true
+force_alphabetical_sort_within_sections = true
+honor_noqa = true
+
+[tool.yapf]
+based_on_style = "google"
+spaces_before_comment = 2
+split_before_logical_operator = true
+column_limit = 120
+split_all_top_level_comma_separated_values = true
+each_dict_entry_on_separate_line = true
+force_multiline_dict = true
