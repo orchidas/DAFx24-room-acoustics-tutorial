@@ -1,9 +1,9 @@
 import numpy as np
-from typing import Optional
+from typing import Optional, Union
 from numpy.typing import ArrayLike, NDArray
 from .feedback_matrix import FeedbackMatrix, FilterMatrix, FeedbackMatrixType
 from .delay_line import DelayLine
-from .absorption_filter import AbsorptionGains
+from .absorption_filter import Absorption, AbsorptionGains, AbsorptionFilters
 
 
 class FDN:
@@ -39,11 +39,34 @@ class FDN:
         assert len(delay_length_samps) == self.num_delay_lines
         self.delay_length_samps = delay_length_samps
 
-    def init_absorption_gains(self, des_t60_ms: float):
-        self.absorption = AbsorptionGains(
+    def init_absorption_gains(self,
+                              des_t60_ms: Union[float, ArrayLike],
+                              t60_freqs: Optional[ArrayLike] = None,
+                              filter_order: Optional[int] = None,
+                              warp_factor: Optional[float] = None):
+        """
+        Initialise absorption gains / filters in FDN. T60 can be homogenous
+        or frequency dependent. If the latter, then frequencies and IIR filter 
+        order must be specified
+        Args:
+            des_t60_ms: broadband or frequency dependent T60 in ms
+            t60_freqs (optional, ArrayLike): frequencies at which T60 is specified
+            filter_order (optional, int): IIR filter order
+            warp_factor (optional, float): warping coefficient for Prony's 
+                                           method of IIR fitting
+        """
+
+        absorption_parent = Absorption(
             self.num_delay_lines,
             self.delay_length_samps + self.feedback.filter_order // 2,
-            self.sample_rate, des_t60_ms, self.frame_size)
+            self.sample_rate, self.frame_size, des_t60_ms)
+
+        if not isinstance(des_t60_ms, np.ndarray):
+            self.absorption = absorption_parent.create_gain_child_instance(
+                AbsorptionGains)
+        else:
+            self.absorption = absorption_parent.create_filter_child_instance(
+                AbsorptionFilters, t60_freqs, filter_order, warp_factor)
 
     def init_feedback_matrix(
             self,
@@ -107,11 +130,14 @@ class FDN:
                                                             self.frame_size:]))
             # update delay lines
             for i in range(self.num_delay_lines):
-                # read from delay lines and adapt absorption
-                delay_line_output[i, :] = self.delay_lines[i].readBuffer(
-                ) * self.absorption.absorption_gains[i]
+                # read from delay lines
+                delay_line_output[i, :] = self.delay_lines[i].readBuffer()
+
                 # push into delay lines
                 self.delay_lines[i].writeBuffer(delay_line_input[i, :])
+
+            # add absorption filtering
+            delay_line_output = self.absorption.process(delay_line_output)
 
             # multiply output of delay line with feedback matrix
             self.feedback_output = self.feedback.process(delay_line_output)

@@ -1,6 +1,6 @@
 import numpy as np
 from numpy.typing import NDArray, ArrayLike
-from typing import Union, Any, Tuple
+from typing import Union, Any, Tuple, Optional
 from scipy.special import erfc
 from scipy.signal import fftconvolve, stft
 from scipy.signal.windows import hann
@@ -8,7 +8,7 @@ from scipy.signal.windows import hann
 
 def db(x: NDArray[float],
        is_squared: bool = False,
-       allow_inf: bool = True) -> NDArray[float]:
+       min_value: float = -200) -> NDArray[float]:
     """Converts values to decibels.
 
     Args:
@@ -17,18 +17,15 @@ def db(x: NDArray[float],
         is_squared (bool):
             Indicates whether `x` represents some power-like quantity (True) or some root-power-like quantity (False).
             Defaults to False, i.e. `x` is a root-power-like auqntity (e.g. Voltage, pressure, ...).
-        allow_inf (bool):
-            Whether an output value of -inf dB should be allowed (True) or raise an exception (False). Defaults to True.
+        min_value (float): cap the decibels to this value, cannot be lower
 
     Returns:
         An array with the converted values, in dB.
     """
     x = np.abs(x)
     factor = 10.0 if is_squared else 20.0
-    divide_mode = "ignore" if allow_inf is True else "raise"
-    with np.errstate(divide=divide_mode):
-        y = factor * np.log10(x)
-    return y
+    y = factor * np.log10(x + np.finfo(np.float64).eps)
+    return y.clip(min=min_value)
 
 
 def db2lin(x: ArrayLike) -> NDArray:
@@ -52,110 +49,10 @@ def ms_to_samps(ms: Union[float, ArrayLike],
         return int(samp)
 
 
-def get_exponential_envelope(ir_len_samp: int, fs: float, t60_ms: float,
-                             init_amp: float):
-    """
-    For a homogeneous T60, return the exponentual envelope of the RIR of the form
-    A * exp(-t / tau), where tau is the time constant derived from tbe T60 and A
-    is the amplitude of he RIR's peak
-    """
-    time_vector = np.arange(0, ir_len_samp / fs, 1.0 / fs)
-    time_constant = (t60_ms * 1e-3) / np.log(1000)
-    exp_envelope = init_amp * np.exp(-time_vector / time_constant)
-    return exp_envelope
-
-
-def tf2minphase(tf: NDArray,
-                axis: int = -1,
-                is_even_fft: bool = True) -> NDArray:
-    """Converts a transfer function to a minimum phase transfer function.
-
-    Args:
-        tf (NDArray): The original transfer function (single-sided spectrum, 0<=f<=fs/2)
-        axis (int): The axis of H along which to calculate the minimum phase filters.
-        is_even_fft (bool): Whether the two-sided conjugate-symmetric spectrum is even or odd in length,
-            this affects the way we replicate the spectral coefficients.
-            If not given (or None), we assume an even-length FFT was used,
-            i.e. n_fft = 2 * (N - 1) where N is the number of frequency bins.
-
-    Returns:
-        NDArray: Spectral coefficients of the minimum phase filter (single-sided spectrum)
-    """
-    num_bins = tf.shape[axis]
-    tf = one_to_two_sided_spectrum(tf, is_even_fft, axis)
-    mag = np.abs(tf)
-    phu = np.imag(sig.hilbert(-np.log(mag + EPS), axis=axis))
-    ph = wrap_phase(phu)
-    tf_mp: npt.NDArray
-    tf_mp = mag * np.exp(1j * ph)
-    # make one-sided spectrum again
-    tf_mp = np.take(tf_mp, np.arange(num_bins), axis=axis)
-    return tf_mp
-
-
-def one_to_two_sided_spectrum(one_sided: NDArray,
-                              is_even: bool = True,
-                              freq_axis: int = -1) -> NDArray:
-    """Convert a one-sided spectrum to a conjugate-symmetric two-sided spectrum (assuming real time-domain data)
-
-    Only the real-parts of the 0 Hz and Nyquist frequency bins are used.
-
-    Args:
-        one_sided (NDArray): The single-sided spectral coefficients (complex)
-            The frequency axis must correspond to frequencies in the range
-            0 <= f <= fs/2 (Nyquist)
-        is_even (bool, optional): Whether the two-sided spectrum had an even number of samples.
-            Defaults to True.
-        freq_axis (int, optional): The axis of single_sided that contains frequency bins. Defaults to -1.
-
-    Returns:
-        NDArray: The two-sided spectral coefficients
-    """
-    # mirror the spectrum
-    two_sided: npt.NDArray
-    two_sided = np.concatenate((one_sided, np.conj(one_sided[-2:0:-1])),
-                               axis=0)
-    if freq_axis != 0:
-        one_sided = np.moveaxis(one_sided, source=freq_axis, destination=0)
-    if is_even:
-        # ensure that the Nyquist bin is real, ignoring phase
-        one_sided[-1] = np.real(one_sided[-1])
-        # mirror the spectrum
-        two_sided = np.concatenate((one_sided, np.conj(one_sided[-2:0:-1])),
-                                   axis=0)
-    else:
-        # mirror the spectrum
-        two_sided = np.concatenate((one_sided, np.conj(one_sided[-1:0:-1])),
-                                   axis=0)
-    # ensure that the 0 Hz bin is real, ignoring phase
-    two_sided[0] = np.real(two_sided[0])
-    if freq_axis != 0:
-        two_sided = np.moveaxis(two_sided, source=0, destination=freq_axis)
-    return two_sided
-
-
-def wrap_phase(ph_uw: NDArray, positive: bool = True) -> NDArray:
-    """Wrap phase values into two pi range.
-
-    Args:
-        ph_uw (NDArray): Unwrapped phase values.
-        positive (bool, optional): Values are position: 0->2pi. If False, values range: -pi->pi. Defaults to True.
-
-    Returns:
-        NDArray: Wrapped phase values.
-    """
-    twopi = 2 * np.pi
-    if positive:
-        ph_wrapped = np.remainder(ph_uw, twopi)
-    else:
-        ph_wrapped = ph_uw - np.round(ph_uw / twopi) * twopi
-    return ph_wrapped
-
-
-def estimate_echo_density(ir: np.ndarray,
+def estimate_echo_density(ir: NDArray,
                           fs: float,
                           win_ms: float = 20.,
-                          end_early: bool = False) -> np.ndarray:
+                          end_early: bool = False) -> NDArray:
     """Estimate the normalised echo density in an impulse response.
 
     The echo density signal is normalised such that a value of 1 corresponds to the expected echo density of a Gaussian
