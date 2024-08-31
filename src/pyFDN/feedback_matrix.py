@@ -78,7 +78,8 @@ class FeedbackMatrix(FilterMatrix):
                  feedback_matrix_type: FeedbackMatrixType,
                  frame_size: int,
                  sparsity: Optional[float] = None,
-                 num_mixing_stages: Optional[int] = None):
+                 num_mixing_stages: Optional[int] = None,
+                 seed: Optional[int] = None):
         """
         Feedback matrix of a feedback delay network. Can be scalar or filter
         Args:
@@ -87,11 +88,15 @@ class FeedbackMatrix(FilterMatrix):
             frame_size (int): buffer size
             sparsity (float) : a number between 0 and 1, denoting the sparsity of the VFM
             num_mixing_stages (int): number of mixing stages in constructing the VFM
+            seed (int): seed for random number generation
         """
 
         super().__init__(num_rows, num_rows, frame_size)
         self.filter_order = 1
         self.feedback_matrix_type = feedback_matrix_type
+
+        if seed is not None:
+            np.random.seed(seed)
 
         if feedback_matrix_type == FeedbackMatrixType.SCALAR_RANDOM:
             self.feedback_matrix = FeedbackMatrix.get_random_unitary_matrix(

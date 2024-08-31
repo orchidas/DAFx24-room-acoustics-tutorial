@@ -208,3 +208,19 @@ class HRIRSOFAReader:
             return iac
         else:
             return irfft(iac, self.ir_length)
+
+    def get_mean_power_corresponding_to_receiver(self,
+                                                 receiver_idx: int,
+                                                 domain: str = "frequency"
+                                                 ) -> ArrayLike:
+        """Get the averaged power of all HRIRs corresponding to a particular receiver"""
+
+        hrirs = self.get_all_irs_corresponding_to_receiver(receiver_idx)
+        num_fft_bins = self.ir_length
+        hrtfs = rfft(hrurs, num_fft_bins, axis=-1)
+        power = np.mean(np.abs(hrirs)**2, axis=0)
+
+        if domain == "frequency":
+            return power
+        else:
+            return ifft(power, self.ir_length)

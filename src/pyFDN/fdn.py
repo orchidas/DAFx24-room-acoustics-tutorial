@@ -8,8 +8,13 @@ from .absorption_filter import AbsorptionGains
 
 class FDN:
 
-    def __init__(self, sample_rate: float, num_inputs: int, num_outputs: int,
-                 num_delay_lines: int, frame_size: int):
+    def __init__(self,
+                 sample_rate: float,
+                 num_inputs: int,
+                 num_outputs: int,
+                 num_delay_lines: int,
+                 frame_size: int,
+                 seed: Optional[int] = None):
         """Feedback delay network in the time domain"""
         self.num_delay_lines = num_delay_lines
         self.frame_size = frame_size
@@ -17,6 +22,7 @@ class FDN:
         self.num_inputs = num_inputs
         self.num_outputs = num_outputs
         self.postproc_filters = None
+        self.seed = seed
 
     def init_io_gains(self, b: NDArray, c: NDArray):
         assert b.shape == (self.num_delay_lines, self.num_inputs)
@@ -47,7 +53,7 @@ class FDN:
             num_mixing_stages: Optional[int] = None):
         self.feedback = FeedbackMatrix(self.num_delay_lines,
                                        feedback_matrix_type, self.frame_size,
-                                       sparsity, num_mixing_stages)
+                                       sparsity, num_mixing_stages, self.seed)
 
     def init_delay_lines(self):
         self.delay_lines = []
@@ -101,26 +107,32 @@ class FDN:
                                                             self.frame_size:]))
             # update delay lines
             for i in range(self.num_delay_lines):
-                # push into delay lines
-                self.delay_lines[i].writeBuffer(delay_line_input[i, :])
                 # read from delay lines and adapt absorption
                 delay_line_output[i, :] = self.delay_lines[i].readBuffer(
                 ) * self.absorption.absorption_gains[i]
+                # push into delay lines
+                self.delay_lines[i].writeBuffer(delay_line_input[i, :])
 
-            # multipily output of delay line with feedback matrix
+            # multiply output of delay line with feedback matrix
             self.feedback_output = self.feedback.process(delay_line_output)
 
             # multiply delay line output with output gains
             cur_output_buffer = self.output_gains @ delay_line_output
-            temp_output_data = cur_output_buffer + self.direct_gain @ cur_input_buffer
 
+            # carry out post-processing filtering
             if self.postproc_filters is not None:
-                output_data[:, sample_number:sample_number + self.frame_size +
-                            self.postproc_filters.filter_matrix.shape[-1] -
-                            1] += self.postproc_filters.process_input(
-                                temp_output_data)
-            else:
-                output_data[:, cur_idx_range] = temp_output_data
+                cur_output_buffer = self.postproc_filters.process_input(
+                    cur_output_buffer)
+                # latter half of cur_output_buffer goes to output directly
+                # without modification
+                output_data[:, cur_idx_range[-1]:cur_idx_range[-1] +
+                            self.postproc_filters.filter_order -
+                            1] += cur_output_buffer[:, self.frame_size:]
+
+            # add to direct gain
+            output_data[:,
+                        cur_idx_range] += cur_output_buffer[:, :self.
+                                                            frame_size] + self.direct_gain @ cur_input_buffer
             sample_number += self.frame_size
 
         return output_data
