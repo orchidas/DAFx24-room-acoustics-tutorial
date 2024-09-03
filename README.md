@@ -2,7 +2,7 @@
 ### Orchisama Das, International Conference on Digital Audio Effects, 2024
 #### University of Surrey, Guildford, UK
 
-This repository contains materials related to the tutorial presented at DAFx 2024.
+This repository contains materials related to the tutorial presented at DAFx 2024. The slides are [here](resources/DAFx24_tutorial_slides.pdf).
 
 ### Installation
 - Clone and create virtual environment, `python3 -m venv .venv`
